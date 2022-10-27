@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	sglog "github.com/sourcegraph/log"
 	"golang.org/x/sys/unix"
 )
@@ -17,16 +16,16 @@ import (
 // defaultSysMountPoint is the common mount point for the sysfs pseudo-filesystem.
 const defaultSysMountPoint = "/sys"
 
-// MountPointInfoOpts modifies the behavior of the metric created
-// by MustRegisterNewMountPointInfoMetric.
-type MountPointInfoOpts struct {
+// CollectorOpts modifies the behavior of the metric created
+// by NewCollector.
+type CollectorOpts struct {
 	// If non-empty, Namespace prefixes the "mount_point_info" metric by the provided string and
 	// an underscore ("_").
 	Namespace string
 }
 
-// MustRegisterNewMountPointInfoMetric registers a Prometheus metric named "mount_point_info" that
-// contains the names of the block storage devices that back each of the requested mounts.
+// NewCollector returns a Prometheus collector that collects a single metric, "mount_point_info",
+// that contains the names of the block storage devices backing each of the requested mounts.
 //
 // Mounts is a set of name -> file path mappings (example: {"indexDir": "/home/.zoekt"}).
 //
@@ -36,10 +35,10 @@ type MountPointInfoOpts struct {
 //
 // This metric only works on Linux-based operating systems that have access to the sysfs pseudo-filesystem.
 // On all other operating systems, this metric will not emit any values.
-func MustRegisterNewMountPointInfoMetric(logger sglog.Logger, opts MountPointInfoOpts, mounts map[string]string) {
+func NewCollector(logger sglog.Logger, opts CollectorOpts, mounts map[string]string) prometheus.Collector {
 	logger = logger.Scoped("mountPointInfo", "registration logic for mount_point_info Prometheus metric")
 
-	metric := promauto.NewGaugeVec(prometheus.GaugeOpts{
+	metric := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: opts.Namespace,
 		Name:      "mount_point_info",
 		Help:      "An info metric with a constant '1' value that contains mount_name, device mappings",
@@ -50,7 +49,7 @@ func MustRegisterNewMountPointInfoMetric(logger sglog.Logger, opts MountPointInf
 	//
 	// See https://en.wikipedia.org/wiki/Sysfs for more information.
 	if runtime.GOOS != "linux" {
-		return
+		return metric
 	}
 
 	for name, filePath := range mounts {
@@ -77,6 +76,8 @@ func MustRegisterNewMountPointInfoMetric(logger sglog.Logger, opts MountPointInf
 
 		metric.WithLabelValues(name, device).Set(1)
 	}
+
+	return metric
 }
 
 type discoverDeviceNameOpts struct {
@@ -86,7 +87,7 @@ type discoverDeviceNameOpts struct {
 
 	// getDeviceNumber, if non-nil, is the function that will be used to find
 	// the number of the block device that stores the specified file.
-	// If getDeviceNumber is nil, mountinfo.getDeviceNumber will be used instead.
+	// If getDeviceNumber is nil, statGetDeviceNumber will be used instead.
 	getDeviceNumber func(filePath string) (major uint32, minor uint32, err error)
 }
 
@@ -113,7 +114,7 @@ func discoverDeviceName(logger sglog.Logger, opts discoverDeviceNameOpts, filePa
 	// - https://unix.stackexchange.com/a/11312
 	// - https://www.kernel.org/doc/ols/2005/ols2005v1-pages-321-334.pdf
 
-	getDeviceNumber := getDeviceNumber
+	getDeviceNumber := statGetDeviceNumber
 	if opts.getDeviceNumber != nil {
 		getDeviceNumber = opts.getDeviceNumber
 	}
@@ -124,6 +125,7 @@ func discoverDeviceName(logger sglog.Logger, opts discoverDeviceNameOpts, filePa
 	}
 
 	sysfsMountPoint = filepath.Clean(sysfsMountPoint)
+	filePath = filepath.Clean(filePath)
 
 	// the provided sysfs mountpoint could itself be a symlink, so we
 	// resolve it immediately so that future file path
@@ -211,7 +213,7 @@ func discoverDeviceName(logger sglog.Logger, opts discoverDeviceNameOpts, filePa
 	return filepath.Base(device), nil
 }
 
-func getDeviceNumber(filePath string) (major uint32, minor uint32, err error) {
+func statGetDeviceNumber(filePath string) (major uint32, minor uint32, err error) {
 	var stat unix.Stat_t
 	err = unix.Stat(filePath, &stat)
 	if err != nil {
