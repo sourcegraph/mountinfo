@@ -15,3 +15,6 @@ indent_style = tab
 indent_style = space
 indent_size = 2
 switch_case_indent = true
+
+[{*.yml,*.yaml,*.md}]
+indent_size = 2
