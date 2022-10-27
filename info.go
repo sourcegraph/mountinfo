@@ -1,3 +1,5 @@
+// Package mountinfo provides a Prometheus collector that advertises
+// the names of block storage devices backing the requested file paths.
 package mountinfo
 
 import (
