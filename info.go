@@ -222,6 +222,7 @@ func statGetDeviceNumber(filePath string) (major uint32, minor uint32, err error
 		return 0, 0, fmt.Errorf("failed to stat %q: %w", filePath, err)
 	}
 
+	//nolint:unconvert // We need the unix.Major/Minor functions to perform the proper bit-shifts
 	major, minor = unix.Major(uint64(stat.Dev)), unix.Minor(uint64(stat.Dev))
 	return major, minor, nil
 }
