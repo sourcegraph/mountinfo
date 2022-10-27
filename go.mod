@@ -1,4 +1,4 @@
-module github.com/sourcegraph/go-mountinfo
+module github.com/sourcegraph/mountinfo
 
 go 1.19
 
