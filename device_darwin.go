@@ -14,7 +14,7 @@ import (
 // stored on.
 func discoverDeviceName(logger sglog.Logger, filePath string) (string, error) {
 	// on macOS (darwin), use the `stat` and `diskutil` OS tools
-	//diskutil info $(stat -f '%Sd' <path>) | grep 'Part of Whole:' | awk '{print $NF}'
+	// diskutil info $(stat -f '%Sd' <path>) | grep 'Part of Whole:' | awk '{print $NF}'
 
 	// macOS does support using the `unix.Stat_t` struct and `unix.Stat` function,
 	// but finding the device identifier name from the major + minor idendifiers proved difficult,
