@@ -27,7 +27,7 @@ type CollectorOpts struct {
 // This metric currently works only on Linux-based operating systems that have access to the sysfs pseudo-filesystem.
 // On all other operating systems, this metric will not emit any values.
 func NewCollector(logger sglog.Logger, opts CollectorOpts, mounts map[string]string) prometheus.Collector {
-	logger = logger.Scoped("mountPointInfo", "registration logic for mount_point_info Prometheus metric")
+	logger = logger.Scoped("mountPointInfo")
 
 	metric := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: opts.Namespace,
@@ -38,7 +38,7 @@ func NewCollector(logger sglog.Logger, opts CollectorOpts, mounts map[string]str
 	for name, filePath := range mounts {
 		// for each <mountName>:<mountFilePath> pairing,
 		// discover the name of the block device that stores <mountFilePath>.
-		discoveryLogger := logger.Scoped("deviceNameDiscovery", "").With(
+		discoveryLogger := logger.Scoped("deviceNameDiscovery").With(
 			sglog.String("mountName", name),
 			sglog.String("mountFilePath", filePath),
 		)
