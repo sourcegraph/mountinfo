@@ -6,7 +6,7 @@ require (
 	github.com/google/go-cmp v0.5.9
 	github.com/moby/sys/mountinfo v0.6.2
 	github.com/prometheus/client_golang v1.14.0
-	github.com/sourcegraph/log v0.0.0-20231018072732-c9c6af5e5ade
+	github.com/sourcegraph/log v0.0.0-20231018134238-fbadff7458bb
 	golang.org/x/sys v0.8.0
 )
 
