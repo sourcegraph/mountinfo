@@ -29,12 +29,12 @@ func discoverDeviceName(logger sglog.Logger, filePath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("unable to resolve %s: %w", filePath, err)
 	}
-	stat, err := exec.Command("stat", "-f", "%Sd", filePath).Output()
+	stat, err := exec.Command("/usr/bin/stat", "-f", "%Sd", filePath).Output()
 	if err != nil {
 		return "", fmt.Errorf("unable to stat %s: %w", filePath, err)
 	}
 
-	diskinfo, err := exec.Command("diskutil", "info", strings.TrimSpace(string(stat))).CombinedOutput()
+	diskinfo, err := exec.Command("/usr/sbin/diskutil", "info", strings.TrimSpace(string(stat))).CombinedOutput()
 	if err != nil {
 		// log the output from `diskutil` instead of including it in the error message because it may be multiline
 		logger.Error(fmt.Sprintf("unable to get disk info on %s. Output is (%s)", string(stat), string(diskinfo)))
