@@ -3,6 +3,9 @@
 package mountinfo
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/prometheus/client_golang/prometheus"
 	sglog "github.com/sourcegraph/log"
 )
@@ -45,6 +48,16 @@ func NewCollector(logger sglog.Logger, opts CollectorOpts, mounts map[string]str
 
 		device, err := discoverDeviceName(discoveryLogger, filePath)
 		if err != nil {
+			// Check if this is a virtual filesystem - don't warn for those
+			var virtualFsErr *virtualFilesystemError
+			if errors.As(err, &virtualFsErr) {
+				discoveryLogger.Debug("skipping metric registration for virtual filesystem",
+					sglog.String("deviceNumber", virtualFsErr.DeviceNumber),
+				)
+				continue
+			}
+
+			// For block devices that failed, log as warning
 			discoveryLogger.Warn("skipping metric registration",
 				sglog.String("reason", "failed to discover device name"),
 				sglog.Error(err),
@@ -61,4 +74,14 @@ func NewCollector(logger sglog.Logger, opts CollectorOpts, mounts map[string]str
 	}
 
 	return metric
+}
+
+// virtualFilesystemError is returned when a filesystem is virtual/pseudo
+// and doesn't have a block device
+type virtualFilesystemError struct {
+	DeviceNumber string
+}
+
+func (e *virtualFilesystemError) Error() string {
+	return fmt.Sprintf("virtual filesystem (device %s)", e.DeviceNumber)
 }

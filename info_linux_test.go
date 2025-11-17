@@ -3,15 +3,15 @@
 package mountinfo
 
 import (
-	"log"
-	"os"
-	"testing"
-
 	"archive/tar"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
+	"log"
+	"os"
 	"path/filepath"
+	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/sourcegraph/log/logtest"
@@ -30,10 +30,88 @@ func Test_DeviceName_SmokeTest(t *testing.T) {
 
 	device, err := discoverDeviceName(logger, filePath)
 	if err != nil {
+		// Check if this is a virtual filesystem - that's acceptable
+		var virtualFsErr *virtualFilesystemError
+		if errors.As(err, &virtualFsErr) {
+			t.Logf("skipping test: current working directory is on a virtual filesystem (device %s)", virtualFsErr.DeviceNumber)
+			return
+		}
 		t.Fatalf("Unable to find device name for path %q: %s", filePath, err)
 	}
 
 	t.Logf("discovered device name %q for path %q", device, filePath)
+}
+
+func Test_isVirtualFilesystem(t *testing.T) {
+	tests := []struct {
+		name         string
+		deviceNumber string
+		wantVirtual  bool
+		wantErr      bool
+	}{
+		{
+			name:         "virtual filesystem - tmpfs",
+			deviceNumber: "0:25",
+			wantVirtual:  true,
+		},
+		{
+			name:         "virtual filesystem - proc",
+			deviceNumber: "0:5",
+			wantVirtual:  true,
+		},
+		{
+			name:         "block device - vda1",
+			deviceNumber: "254:1",
+			wantVirtual:  false,
+		},
+		{
+			name:         "block device - nvme",
+			deviceNumber: "259:0",
+			wantVirtual:  false,
+		},
+		{
+			name:         "invalid format - missing colon",
+			deviceNumber: "254",
+			wantVirtual:  false,
+		},
+		{
+			name:         "invalid format - non-numeric major",
+			deviceNumber: "abc:1",
+			wantVirtual:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			isVirtual := isVirtualFilesystem(tt.deviceNumber)
+			if isVirtual != tt.wantVirtual {
+				t.Errorf("isVirtualFilesystem() = %v, want %v", isVirtual, tt.wantVirtual)
+			}
+		})
+	}
+}
+
+func Test_DeviceName_VirtualFilesystem(t *testing.T) {
+	logger := logtest.Scoped(t)
+
+	// Mock a virtual filesystem (major:minor = 0:x)
+	getDeviceNumber = func(filePath string) (deviceNumber string, err error) {
+		return "0:25", nil // tmpfs typically uses 0:X
+	}
+
+	_, err := discoverDeviceName(logger, "/fake/path")
+	if err == nil {
+		t.Fatal("expected error for virtual filesystem, got nil")
+	}
+
+	var virtualFsErr *virtualFilesystemError
+	if !errors.As(err, &virtualFsErr) {
+		t.Fatalf("expected VirtualFilesystemError, got %T: %v", err, err)
+	}
+
+	if virtualFsErr.DeviceNumber != "0:25" {
+		t.Errorf("expected device number 0:25, got %s", virtualFsErr.DeviceNumber)
+	}
 }
 
 func Test_DeviceName_Snapshots(t *testing.T) {
