@@ -5,11 +5,29 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/moby/sys/mountinfo"
 	sglog "github.com/sourcegraph/log"
 )
+
+// isVirtualFilesystem determines if a filesystem is virtual/pseudo based on
+// major number and filesystem type
+func isVirtualFilesystem(deviceNumber string) bool {
+	parts := strings.Split(deviceNumber, ":")
+	if len(parts) != 2 {
+		return false
+	}
+
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return false
+	}
+
+	// Major number 0 indicates a virtual filesystem
+	return major == 0
+}
 
 // defined as a variable so that it can be redefined by test routines
 var findSysfsMountpoint = func() (mountpoint string, err error) {
@@ -132,6 +150,10 @@ func discoverDeviceName(logger sglog.Logger, filePath string) (string, error) {
 		"discovered device number",
 		sglog.String("deviceNumber", deviceNumber),
 	)
+
+	if isVirtualFilesystem(deviceNumber) {
+		return "", fmt.Errorf("unsupported device number: %w", &virtualFilesystemError{DeviceNumber: deviceNumber})
+	}
 
 	devicePath, err := discoverSysfsDevicePath(sysfsMountPoint, deviceNumber)
 	if err != nil {
