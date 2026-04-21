@@ -193,8 +193,6 @@ func Test_DeviceName_Snapshots(t *testing.T) {
 			expectedDeviceName: "dm-0",
 		},
 	} {
-		test := test
-
 		t.Run(t.Name(), func(t *testing.T) {
 			t.Parallel()
 
