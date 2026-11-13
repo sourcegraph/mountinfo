@@ -13,7 +13,7 @@ import (
 func Test_DeviceName_SmokeTest(t *testing.T) {
 	// A simple smoke test to verify that we can find the storage device
 	// for the current working directory.
-	logger := logtest.Scoped(t)
+	logger := sglogAdapter{logtest.Scoped(t)}
 
 	filePath, err := os.Getwd()
 	if err != nil {

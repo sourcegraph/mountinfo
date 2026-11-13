@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/moby/sys/mountinfo"
-	sglog "github.com/sourcegraph/log"
 )
 
 // isVirtualFilesystem determines if a filesystem is virtual/pseudo based on
@@ -115,7 +114,7 @@ func getDeviceBlockName(sysfsMountPoint, devicePath string) (string, error) {
 
 // discoverDeviceName returns the name of the block device that filePath is
 // stored on.
-func discoverDeviceName(logger sglog.Logger, filePath string) (string, error) {
+func discoverDeviceName(logger discoveryLogger, filePath string) (string, error) {
 	// Note: It's quite involved to implement the device discovery logic for
 	// every possible kind of storage device (e.x. logical volumes, NFS, etc.) See
 	// https://unix.stackexchange.com/a/11312 for more information.
@@ -148,7 +147,7 @@ func discoverDeviceName(logger sglog.Logger, filePath string) (string, error) {
 
 	logger.Debug(
 		"discovered device number",
-		sglog.String("deviceNumber", deviceNumber),
+		"deviceNumber", deviceNumber,
 	)
 
 	if isVirtualFilesystem(deviceNumber) {
@@ -161,7 +160,7 @@ func discoverDeviceName(logger sglog.Logger, filePath string) (string, error) {
 	}
 
 	logger.Debug("discovered device path",
-		sglog.String("devicePath", devicePath),
+		"devicePath", devicePath,
 	)
 
 	name, err := getDeviceBlockName(sysfsMountPoint, devicePath)
