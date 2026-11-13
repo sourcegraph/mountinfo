@@ -21,7 +21,7 @@ func Test_DeviceName_SmokeTest(t *testing.T) {
 	// A simple smoke test to verify that we can find the storage device
 	// for the current working directory.
 	// NOTE: CWD must be on a block device. Cannot be, for example, a Docker bind mount. CWD _can_ be a Docker volume.
-	logger := logtest.Scoped(t)
+	logger := sglogAdapter{logtest.Scoped(t)}
 
 	filePath, err := os.Getwd()
 	if err != nil {
@@ -92,7 +92,7 @@ func Test_isVirtualFilesystem(t *testing.T) {
 }
 
 func Test_DeviceName_VirtualFilesystem(t *testing.T) {
-	logger := logtest.Scoped(t)
+	logger := sglogAdapter{logtest.Scoped(t)}
 
 	// Mock a virtual filesystem (major:minor = 0:x)
 	getDeviceNumber = func(filePath string) (deviceNumber string, err error) {
@@ -214,7 +214,7 @@ func Test_DeviceName_Snapshots(t *testing.T) {
 				t.Fatalf("unable to set up temporary sysfs location: %s", err)
 			}
 
-			logger := logtest.Scoped(t)
+			logger := sglogAdapter{logtest.Scoped(t)}
 
 			fakeFilePath := "doesn't matter" // the file path itself doesn't matter since we hard-code the device number
 

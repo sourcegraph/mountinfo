@@ -6,13 +6,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	sglog "github.com/sourcegraph/log"
 )
 
 // discoverDeviceName returns the name of the block device that filePath is
 // stored on.
-func discoverDeviceName(logger sglog.Logger, filePath string) (string, error) {
+func discoverDeviceName(logger discoveryLogger, filePath string) (string, error) {
 	// on macOS (darwin), use the `stat` and `diskutil` OS tools
 	// diskutil info $(stat -f '%Sd' <path>) | grep 'Part of Whole:' | awk '{print $NF}'
 

@@ -5,6 +5,7 @@ package mountinfo
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/prometheus/client_golang/prometheus"
 	sglog "github.com/sourcegraph/log"
@@ -30,8 +31,32 @@ type CollectorOpts struct {
 // This metric currently works only on Linux-based operating systems that have access to the sysfs pseudo-filesystem.
 // On all other operating systems, this metric will not emit any values.
 func NewCollector(logger sglog.Logger, opts CollectorOpts, mounts map[string]string) prometheus.Collector {
-	logger = logger.Scoped("mountPointInfo")
+	logger = logger.Scoped("mountPointInfo").Scoped("deviceNameDiscovery")
+	return newCollector(func(name, filePath string) discoveryLogger {
+		return sglogAdapter{logger.With(
+			sglog.String("mountName", name),
+			sglog.String("mountFilePath", filePath),
+		)}
+	}, opts, mounts)
+}
 
+// NewSlogCollector is like NewCollector, but logs to a log/slog logger.
+func NewSlogCollector(logger *slog.Logger, opts CollectorOpts, mounts map[string]string) prometheus.Collector {
+	return newCollector(func(name, filePath string) discoveryLogger {
+		return logger.With("mountName", name, "mountFilePath", filePath)
+	}, opts, mounts)
+}
+
+// discoveryLogger is the logging the collector does while discovering
+// devices. *slog.Logger implements it, and sglogAdapter implements it for
+// github.com/sourcegraph/log.
+type discoveryLogger interface {
+	Debug(msg string, args ...any)
+	Warn(msg string, args ...any)
+	Error(msg string, args ...any)
+}
+
+func newCollector(newLogger func(name, filePath string) discoveryLogger, opts CollectorOpts, mounts map[string]string) prometheus.Collector {
 	metric := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: opts.Namespace,
 		Name:      "mount_point_info",
@@ -41,39 +66,60 @@ func NewCollector(logger sglog.Logger, opts CollectorOpts, mounts map[string]str
 	for name, filePath := range mounts {
 		// for each <mountName>:<mountFilePath> pairing,
 		// discover the name of the block device that stores <mountFilePath>.
-		discoveryLogger := logger.Scoped("deviceNameDiscovery").With(
-			sglog.String("mountName", name),
-			sglog.String("mountFilePath", filePath),
-		)
+		logger := newLogger(name, filePath)
 
-		device, err := discoverDeviceName(discoveryLogger, filePath)
+		device, err := discoverDeviceName(logger, filePath)
 		if err != nil {
 			// Check if this is a virtual filesystem - don't warn for those
 			var virtualFsErr *virtualFilesystemError
 			if errors.As(err, &virtualFsErr) {
-				discoveryLogger.Debug("skipping metric registration for virtual filesystem",
-					sglog.String("deviceNumber", virtualFsErr.DeviceNumber),
+				logger.Debug("skipping metric registration for virtual filesystem",
+					"deviceNumber", virtualFsErr.DeviceNumber,
 				)
 				continue
 			}
 
 			// For block devices that failed, log as warning
-			discoveryLogger.Warn("skipping metric registration",
-				sglog.String("reason", "failed to discover device name"),
-				sglog.Error(err),
+			logger.Warn("skipping metric registration",
+				"reason", "failed to discover device name",
+				"error", err,
 			)
 
 			continue
 		}
 
-		discoveryLogger.Debug("discovered device name",
-			sglog.String("deviceName", device),
+		logger.Debug("discovered device name",
+			"deviceName", device,
 		)
 
 		metric.WithLabelValues(name, device).Set(1)
 	}
 
 	return metric
+}
+
+// sglogAdapter implements discoveryLogger for github.com/sourcegraph/log. It
+// supports the arguments the collector passes: string values, and an error
+// under the "error" key.
+type sglogAdapter struct {
+	l sglog.Logger
+}
+
+func (a sglogAdapter) Debug(msg string, args ...any) { a.l.Debug(msg, sglogFields(args)...) }
+func (a sglogAdapter) Warn(msg string, args ...any)  { a.l.Warn(msg, sglogFields(args)...) }
+func (a sglogAdapter) Error(msg string, args ...any) { a.l.Error(msg, sglogFields(args)...) }
+
+func sglogFields(args []any) []sglog.Field {
+	var fields []sglog.Field
+	for i := 0; i+1 < len(args); i += 2 {
+		key := fmt.Sprint(args[i])
+		if err, ok := args[i+1].(error); ok && key == "error" {
+			fields = append(fields, sglog.Error(err))
+		} else {
+			fields = append(fields, sglog.String(key, fmt.Sprint(args[i+1])))
+		}
+	}
+	return fields
 }
 
 // virtualFilesystemError is returned when a filesystem is virtual/pseudo
